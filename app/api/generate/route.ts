@@ -1,38 +1,55 @@
-import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import OpenAI from "openai";
 
-export async function POST(req: NextRequest) {
+const openai = new OpenAI({
+  baseURL: "https://api.deepseek.com/v1",
+  apiKey: process.env.DEEPSEEK_API_KEY,
+});
+
+export async function POST(req: Request) {
   try {
-    const { angerPatterns, triggers } = await req.json();
+    const body = await req.json();
+    const { angerTriggers, frequency, severity, physicalSymptoms, previousAttempts, supportSystem, courtOrdered } = body;
 
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      baseURL: 'https://api.deepseek.com/v1',
-    });
-
-    const systemPrompt =
-      'You are an expert anger management therapist and emotional regulation coach. Generate a personalized anger management plan based on the user\'s patterns and triggers. Include: (1) identification of their anger style (hot anger, cold anger, passive aggression, etc.), (2) techniques specifically suited to their anger pattern (counting, time-out, physical exercise, cognitive reframing, assertiveness training), (3) an anger trigger journal template with daily log format, (4) a graduated response plan for different intensity levels, (5) healthy expression strategies for the specific triggers they mention, and (6) long-term anger resolution approach. Be direct, practical, and compassionate.';
-
-    const userPrompt = [
-      angerPatterns ? `Anger patterns: "${angerPatterns}"` : '',
-      triggers ? `Known triggers: "${triggers}"` : '',
-    ].filter(Boolean).join('\n');
-
-    const completion = await client.chat.completions.create({
-      model: 'deepseek-chat',
+    const completion = await openai.chat.completions.create({
+      model: "deepseek-chat",
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        {
+          role: "system",
+          content: `You are a professional anger management program assistant. Generate a comprehensive, structured anger management program based on the provided information. Include all sections below in well-structured markdown format.
+
+Output must include ALL of the following:
+1. Trigger Awareness Plan
+2. Warning Sign Identification
+3. De-escalation Techniques
+4. Coping Strategies by Situation Type
+5. Progress Tracking Chart
+6. Referral Resources
+
+Be evidence-based, use clinical terminology appropriately, and format everything in clear markdown with headers and bullet points.`,
+        },
+        {
+          role: "user",
+          content: `Generate an anger management plan with the following details:
+
+Anger Triggers: ${angerTriggers || "Not specified"}
+Frequency of Episodes: ${frequency || "Not specified"}
+Severity Level (1-10): ${severity || "Not specified"}
+Physical Symptoms: ${physicalSymptoms || "Not specified"}
+Previous Attempts: ${previousAttempts || "Not specified"}
+Support System: ${supportSystem || "Not specified"}
+Court-Ordered or Voluntary: ${courtOrdered || "Not specified"}`,
+        },
       ],
-      max_tokens: 900,
+      temperature: 0.7,
     });
 
-    const output = completion.choices[0]?.message?.content || 'No response generated.';
-
-    return NextResponse.json({ output });
-  } catch (err: unknown) {
-    console.error('Generation error:', err);
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const result = completion.choices[0]?.message?.content || "No response generated.";
+    return Response.json({ result });
+  } catch (error: unknown) {
+    console.error("Generate error:", error);
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Generation failed" },
+      { status: 500 }
+    );
   }
 }
